@@ -27,32 +27,36 @@ function Billdesk() {
 
   const navItems = [
     { label: "Billing", path: "billing", icon: "receipt_long" },
-    { label: "Stock", path: "stock", icon: "inventory_2" }, 
+    { label: "Stock", path: "stock", icon: "inventory_2" },
     { label: "Critical Stock", path: "criticalstock", icon: "production_quantity_limits" },
   ];
 
   return (
-    <div className="flex min-h-screen font-poppins bg-[#f4f6f8]">
-      <aside className="w-64 bg-[#1976d2] text-white fixed top-0 left-0 bottom-0 p-6 shadow-lg z-10">
-        <h2 className="text-3xl font-bold mb-12 text-center tracking-wide">
-          Bill Desk
-        </h2>
+    <div className="flex min-h-screen font-poppins bg-[#f5f7fa]">
+      {/* Sidebar */}
+      <aside className="w-64 bg-[#2e3e99] text-white fixed top-0 left-0 bottom-0 p-6 shadow-xl z-10">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-extrabold tracking-wide">Bill Desk</h2>
+        </div>
+
+        {/* Navigation */}
         <nav>
-          <ul className="space-y-3">
+          <ul className="space-y-4">
             {navItems.map(({ label, path, icon }) => {
               const isActive = activeLink === path;
               return (
                 <li key={path}>
                   <Link
                     to={path}
-                    className={`flex items-center gap-4 px-5 py-3 rounded-lg transition-all duration-300 shadow-sm 
-                      ${isActive ? "bg-white text-[#1976d2]" : "bg-[#2196f3] text-white"} 
-                      hover:bg-white hover:text-[#1976d2]`}
                     onClick={() => setActiveLink(path)}
+                    className={`flex items-center gap-4 px-5 py-3 rounded-xl text-sm font-medium shadow-md transition-all duration-300 border
+                      ${
+                        isActive
+                          ? "bg-white text-[#2e3e99] border-white"
+                          : "bg-white text-[#2e3e99] hover:shadow-lg hover:border-[#3f51b5]"
+                      }`}
                   >
-                    <span className={`material-symbols-outlined text-xl ${isActive ? "text-[#1976d2]" : "text-white"}`}>
-                      {icon}
-                    </span>
+                    <span className="material-symbols-outlined text-xl">{icon}</span>
                     {label}
                   </Link>
                 </li>
@@ -61,8 +65,9 @@ function Billdesk() {
           </ul>
         </nav>
 
+        {/* Logout Button */}
         <button
-          className="flex items-center gap-4 px-5 py-3 mt-8 rounded-lg bg-[#f44336] text-white hover:bg-[#d32f2f] w-full transition-all duration-300 shadow-sm"
+          className="flex items-center gap-4 px-5 py-3 mt-10 rounded-xl bg-gradient-to-r from-[#f44336] to-[#d32f2f] text-white hover:opacity-90 w-full transition-all duration-300 shadow-md"
           onClick={handleLogout}
         >
           <span className="material-symbols-outlined text-xl">exit_to_app</span>
@@ -70,7 +75,8 @@ function Billdesk() {
         </button>
       </aside>
 
-      <main className="ml-64 w-full p-10">
+      {/* Main Content */}
+      <main className="ml-64 w-full min-h-screen bg-white p-10">
         <Outlet />
       </main>
     </div>

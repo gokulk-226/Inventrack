@@ -12,6 +12,8 @@ function Supplier() {
   const [editedEmail, setEditedEmail] = useState("");
   const [editedContactNo, setEditedContactNo] = useState("");
   const [showScrollHint, setShowScrollHint] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const tableRef = useRef(null);
 
@@ -33,57 +35,94 @@ function Supplier() {
   };
 
   const fetchSuppliers = async () => {
+    setIsLoading(true);
+    setError("");
     try {
       const response = await axios.get("http://localhost:5000/suppliers");
       setSuppliers(response.data);
     } catch (error) {
+      setError("Failed to fetch suppliers. Please try again.");
       console.error("Error fetching suppliers:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-  const mobileRegex = /^[0-9]{10}$/;
+  const mobileRegex = /^\d{10}$/;
 
-  const handleAddSupplier = async (e) => {
-    e.preventDefault();
+  const validateInputs = (name, email, contactNo, id = null) => {
     const trimmedName = name.trim();
     const trimmedEmail = email.trim();
     const trimmedContactNo = contactNo.trim();
 
     if (!trimmedName || !trimmedEmail || !trimmedContactNo) {
-      return alert("All fields are required!");
+      return "All fields are required!";
     }
 
     if (!emailRegex.test(trimmedEmail)) {
-      return alert("Invalid email format!");
+      return "Invalid email format!";
     }
 
     if (!mobileRegex.test(trimmedContactNo)) {
-      return alert("Contact number must be exactly 10 digits!");
+      if (/\D/.test(trimmedContactNo)) {
+        return "Contact number must contain only numbers!";
+      }
+      if (trimmedContactNo.length !== 10) {
+        return "Contact number must be exactly 10 digits!";
+      }
+      return "Invalid contact number format!";
     }
 
-    if (suppliers.some(s => s.name.toLowerCase() === trimmedName.toLowerCase())) {
-      return alert("Supplier name already exists!");
+    if (suppliers.some(s => 
+      s.name.toLowerCase() === trimmedName.toLowerCase() && 
+      s._id !== id
+    )) {
+      return "Supplier name already exists!";
     }
 
-    if (suppliers.some(s => s.email.toLowerCase() === trimmedEmail.toLowerCase())) {
-      return alert("Email already exists!");
+    if (suppliers.some(s => 
+      s.email.toLowerCase() === trimmedEmail.toLowerCase() && 
+      s._id !== id
+    )) {
+      return "Email already exists!";
     }
 
-    if (suppliers.some(s => s.contactNo === trimmedContactNo)) {
-      return alert("Contact number already exists!");
+    if (suppliers.some(s => 
+      s.contactNo === trimmedContactNo && 
+      s._id !== id
+    )) {
+      return "Contact number already exists!";
+    }
+
+    return null;
+  };
+
+  const handleAddSupplier = async (e) => {
+    e.preventDefault();
+    setError("");
+    
+    const validationError = validateInputs(name, email, contactNo);
+    if (validationError) {
+      setError(validationError);
+      return;
     }
 
     try {
+      setIsLoading(true);
       await axios.post("http://localhost:5000/suppliers", {
-        name: trimmedName,
-        email: trimmedEmail,
-        contactNo: trimmedContactNo
+        name: name.trim(),
+        email: email.trim(),
+        contactNo: contactNo.trim()
       });
-      setName(""); setEmail(""); setContactNo("");
-      fetchSuppliers();
+      setName("");
+      setEmail("");
+      setContactNo("");
+      await fetchSuppliers();
     } catch (error) {
-      alert(error.response?.data?.error || "Error adding supplier");
+      setError(error.response?.data?.error || "Error adding supplier");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -92,57 +131,50 @@ function Supplier() {
     setEditedName(supplier.name);
     setEditedEmail(supplier.email);
     setEditedContactNo(supplier.contactNo);
+    setError("");
   };
 
   const handleSaveEdit = async (id) => {
-    const trimmedName = editedName.trim();
-    const trimmedEmail = editedEmail.trim();
-    const trimmedContactNo = editedContactNo.trim();
-
-    if (!trimmedName || !trimmedEmail || !trimmedContactNo) {
-      return alert("Fields cannot be empty!");
-    }
-
-    if (!emailRegex.test(trimmedEmail)) {
-      return alert("Invalid email format!");
-    }
-
-    if (!mobileRegex.test(trimmedContactNo)) {
-      return alert("Contact number must be exactly 10 digits!");
-    }
-
-    if (suppliers.some(s => s.name.toLowerCase() === trimmedName.toLowerCase() && s._id !== id)) {
-      return alert("Supplier name already exists!");
-    }
-
-    if (suppliers.some(s => s.email.toLowerCase() === trimmedEmail.toLowerCase() && s._id !== id)) {
-      return alert("Email already exists!");
-    }
-
-    if (suppliers.some(s => s.contactNo === trimmedContactNo && s._id !== id)) {
-      return alert("Contact number already exists!");
+    const validationError = validateInputs(editedName, editedEmail, editedContactNo, id);
+    if (validationError) {
+      setError(validationError);
+      return;
     }
 
     try {
+      setIsLoading(true);
       await axios.put(`http://localhost:5000/suppliers/${id}`, {
-        name: trimmedName,
-        email: trimmedEmail,
-        contactNo: trimmedContactNo,
+        name: editedName.trim(),
+        email: editedEmail.trim(),
+        contactNo: editedContactNo.trim(),
       });
       setEditMode(null);
-      fetchSuppliers();
+      await fetchSuppliers();
     } catch (error) {
-      alert(error.response?.data?.error || "Error updating supplier");
+      setError(error.response?.data?.error || "Error updating supplier");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this supplier?")) return;
+    
     try {
+      setIsLoading(true);
       await axios.delete(`http://localhost:5000/suppliers/${id}`);
-      fetchSuppliers();
+      await fetchSuppliers();
     } catch (error) {
-      alert(error.response?.data?.error || "Error deleting supplier");
+      setError(error.response?.data?.error || "Error deleting supplier");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleContactNoChange = (e, setter) => {
+    const value = e.target.value;
+    if (/^\d*$/.test(value) && value.length <= 10) {
+      setter(value);
     }
   };
 
@@ -155,96 +187,142 @@ function Supplier() {
           placeholder="Supplier Name"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          required
         />
         <input
           type="email"
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          required
         />
         <input
           type="text"
-          placeholder="Contact No"
+          placeholder="Contact No (10 digits)"
           value={contactNo}
-          onChange={(e) => setContactNo(e.target.value)}
+          onChange={(e) => handleContactNoChange(e, setContactNo)}
+          maxLength="10"
+          required
         />
-        <button type="submit" className="save-btn">Add</button>
+        <button 
+          type="submit" 
+          className="save-btn"
+          disabled={isLoading}
+        >
+          {isLoading ? "Adding..." : "Add"}
+        </button>
       </form>
 
-      <h2 className="gradient-heading">Supplier List</h2>
-      <div className="table-container relative" ref={tableRef}>
-        <table className="table-1">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Contact No</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {suppliers.length === 0 ? (
-              <tr>
-                <td colSpan="4" className="no-records">No suppliers found</td>
-              </tr>
-            ) : (
-              suppliers.map((supplier) => (
-                <tr key={supplier._id}>
-                  {editMode === supplier._id ? (
-                    <>
-                      <td>
-                        <input
-                          className="table-input"
-                          value={editedName}
-                          onChange={(e) => setEditedName(e.target.value)}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          className="table-input"
-                          value={editedEmail}
-                          onChange={(e) => setEditedEmail(e.target.value)}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          className="table-input"
-                          value={editedContactNo}
-                          onChange={(e) => setEditedContactNo(e.target.value)}
-                        />
-                      </td>
-                      <td>
-                        <div className="action-buttons">
-                          <button className="save-btn" onClick={() => handleSaveEdit(supplier._id)}>Save</button>
-                          <button className="cancel-btn" onClick={() => setEditMode(null)}>Cancel</button>
-                        </div>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td>{supplier.name}</td>
-                      <td>{supplier.email}</td>
-                      <td>{supplier.contactNo}</td>
-                      <td>
-                        <div className="action-buttons">
-                          <button className="edit-btn" onClick={() => handleEditClick(supplier)}>Edit</button>
-                          <button className="delete-btn" onClick={() => handleDelete(supplier._id)}>Delete</button>
-                        </div>
-                      </td>
-                    </>
-                  )}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+      {error && <div className="error-message">{error}</div>}
 
-        {showScrollHint && (
-          <span className="material-symbols-outlined scroll-hint-icon">
-            arrow_downward_alt
-          </span>
-        )}
-      </div>
+      <h2 className="gradient-heading">Supplier List</h2>
+      {isLoading && suppliers.length === 0 ? (
+        <div className="loading">Loading suppliers...</div>
+      ) : (
+        <div className="table-container relative" ref={tableRef}>
+          <table className="table-1">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Contact No</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {suppliers.length === 0 ? (
+                <tr>
+                  <td colSpan="4" className="no-records">
+                    {isLoading ? "Loading..." : "No suppliers found"}
+                  </td>
+                </tr>
+              ) : (
+                suppliers.map((supplier) => (
+                  <tr key={supplier._id}>
+                    {editMode === supplier._id ? (
+                      <>
+                        <td>
+                          <input
+                            className="table-input"
+                            value={editedName}
+                            onChange={(e) => setEditedName(e.target.value)}
+                            required
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="table-input"
+                            value={editedEmail}
+                            onChange={(e) => setEditedEmail(e.target.value)}
+                            required
+                          />
+                        </td>
+                        <td>
+                          <input
+                            className="table-input"
+                            value={editedContactNo}
+                            onChange={(e) => handleContactNoChange(e, setEditedContactNo)}
+                            maxLength="10"
+                            required
+                          />
+                        </td>
+                        <td>
+                          <div className="action-buttons">
+                            <button 
+                              className="save-btn" 
+                              onClick={() => handleSaveEdit(supplier._id)}
+                              disabled={isLoading}
+                            >
+                              {isLoading ? "Saving..." : "Save"}
+                            </button>
+                            <button 
+                              className="cancel-btn" 
+                              onClick={() => setEditMode(null)}
+                              disabled={isLoading}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td>{supplier.name}</td>
+                        <td>{supplier.email}</td>
+                        <td>{supplier.contactNo}</td>
+                        <td>
+                          <div className="action-buttons">
+                            <button 
+                              className="edit-btn" 
+                              onClick={() => handleEditClick(supplier)}
+                              disabled={isLoading}
+                            >
+                              Edit
+                            </button>
+                            <button 
+                              className="delete-btn" 
+                              onClick={() => handleDelete(supplier._id)}
+                              disabled={isLoading}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+
+          {showScrollHint && (
+            <span className="material-symbols-outlined scroll-hint-icon">
+              arrow_downward_alt
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
