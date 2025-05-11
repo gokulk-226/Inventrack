@@ -1,10 +1,18 @@
-// routes/billingRoutes.js
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const { createBill, getAllBills } = require("../controllers/BillingController");
+const {
+  createBill,
+  getAllBills,
+  getBillPDF
+} = require('../controllers/BillingController');
 
-router.post("/", createBill);
+// Create new bill
+router.post('/', createBill);
 
-router.get("/", getAllBills);
+// Get all bills
+router.get('/', getAllBills);
+
+// Get PDF for specific bill
+router.get('/:id/pdf', getBillPDF);
 
 module.exports = router;
