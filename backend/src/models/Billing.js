@@ -8,7 +8,6 @@ const itemSchema = new mongoose.Schema({
 });
 
 const billingSchema = new mongoose.Schema({
-  billNo: { type: Number, required: true },
   customerName: { type: String, required: true },
   mobile: {
     type: String,
@@ -23,29 +22,15 @@ const billingSchema = new mongoose.Schema({
   items: { type: [itemSchema], required: true },
   grandTotal: { type: Number, required: true, min: 0 },
   date: {
-    type: Date,
+    type: String,  // Changed from Date to String
     required: true,
     default: () => {
       const now = new Date();
-      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      return now.toISOString().split('T')[0]; // Stores only YYYY-MM-DD
     }
   }
 });
 
-// Auto-increment billNo based on date
-billingSchema.pre('save', async function(next) {
-  if (this.isNew) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const lastBill = await this.constructor.findOne({
-      date: today
-    }).sort({ billNo: -1 });
-    
-    this.billNo = lastBill ? lastBill.billNo + 1 : 1;
-    this.date = today;
-  }
-  next();
-});
+// Removed the billNo pre-save hook completely
 
 module.exports = mongoose.model('Billing', billingSchema);

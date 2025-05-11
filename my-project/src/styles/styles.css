@@ -248,3 +248,31 @@ td {
   background-color: #fff8e1;
   color: #f57f17;
 }
+.view-btn {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #2563eb, #38bdf8);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+.view-btn:hover {
+  background: linear-gradient(135deg, #1d4ed8, #0ea5e9);
+  box-shadow: 0 3px 6px rgba(59, 130, 246, 0.4);
+}
+
+.view-btn:active {
+  background: linear-gradient(135deg, #1e40af, #0284c7);
+  transform: translateY(1px);
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.4);
+}
+
+.view-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+}

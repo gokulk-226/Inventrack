@@ -1,21 +1,24 @@
-const { MongoClient } = require("mongodb");
-const jsPDF = require("jspdf");
 const Billing = require("../models/Billing");
+const { jsPDF } = require("jspdf");
 
-// Utility to format date to dd-mm-yy
+// Utility to format date to dd-mm-yyyy (Indian format)
 const formatDate = (date) => {
-  const d = new Date(date);
+  if (!date) return '';
+  
+  // Handle both Date objects and ISO strings
+  const d = date instanceof Date ? date : new Date(date);
   const day = String(d.getDate()).padStart(2, "0");
   const month = String(d.getMonth() + 1).padStart(2, "0");
-  const year = String(d.getFullYear()).slice(-2);
+  const year = d.getFullYear();
   return `${day}-${month}-${year}`;
 };
 
-// Generate PDF using jsPDF
+// Generate PDF using jsPDF (date only)
 const generatePDF = (billData) => {
   const doc = new jsPDF();
-  const { customerName, mobile, items, grandTotal, date, billNo } = billData;
+  const { customerName, mobile, items, grandTotal, date } = billData;
 
+  // Header
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
   doc.text("KPS SILKS", 20, 20);
@@ -25,15 +28,16 @@ const generatePDF = (billData) => {
   doc.text("415 Uthukuli Road,", 20, 28);
   doc.text("Kunnnathur, Tamil Nadu - 638103", 20, 33);
 
+  // Date display (formatted without time)
   doc.setFontSize(12);
   doc.text(`Date: ${formatDate(date)}`, 150, 20, { align: "right" });
-  doc.text(`Bill No: ${billNo}`, 150, 28, { align: "right" });
 
+  // Customer info
   doc.text(`Customer Name : ${customerName}`, 20, 45);
   doc.text(`Mobile Number : +91 ${mobile}`, 20, 50);
 
+  // Items list
   doc.text("-------------------------------------------------------------", 20, 55);
-
   let y = 65;
   let calculatedTotal = 0;
 
@@ -45,6 +49,7 @@ const generatePDF = (billData) => {
     y += 20;
   });
 
+  // Footer
   doc.text("-------------------------------------------------------------", 20, y);
   doc.setFont("helvetica", "bold");
   doc.text(`Grand Total: Rs. ${calculatedTotal.toFixed(2)}`, 20, y + 10);
@@ -54,7 +59,7 @@ const generatePDF = (billData) => {
   return doc.output("arraybuffer");
 };
 
-// Create a new bill and save to database
+// Create bill with date-only storage
 const createBill = async (req, res) => {
   try {
     const { customerName, mobile, items } = req.body;
@@ -63,7 +68,7 @@ const createBill = async (req, res) => {
       return res.status(400).json({ error: "Customer details and at least one item are required." });
     }
 
-    // Calculate totals for each item and grand total
+    // Process items and calculate total
     const processedItems = items.map(item => ({
       ...item,
       totalPrice: item.price * item.quantity
@@ -71,17 +76,13 @@ const createBill = async (req, res) => {
 
     const grandTotal = processedItems.reduce((sum, item) => sum + item.totalPrice, 0);
 
-    // Get the next bill number
-    const lastBill = await Billing.findOne().sort({ billNo: -1 });
-    const billNo = lastBill ? lastBill.billNo + 1 : 1;
-
+    // Create new bill with current date (time portion will be 00:00:00)
     const newBill = new Billing({
-      billNo,
       customerName,
       mobile,
       items: processedItems,
       grandTotal,
-      date: new Date()
+      date: new Date(new Date().setHours(0, 0, 0, 0)) // Normalize to date-only
     });
 
     const savedBill = await newBill.save();
@@ -89,8 +90,11 @@ const createBill = async (req, res) => {
 
     res.status(201).json({
       message: "Bill created successfully",
-      bill: savedBill,
-      pdf: pdfBuffer.toString("base64") // Send PDF as base64 string
+      bill: {
+        ...savedBill.toObject(),
+        date: formatDate(savedBill.date) // Return formatted date in response
+      },
+      pdf: pdfBuffer.toString("base64")
     });
   } catch (err) {
     console.error("Error creating bill:", err);
@@ -98,18 +102,25 @@ const createBill = async (req, res) => {
   }
 };
 
-// Get all bills
+// Get all bills with formatted dates
 const getAllBills = async (req, res) => {
   try {
-    const bills = await Billing.find().sort({ billNo: -1 });
-    res.status(200).json(bills);
+    const bills = await Billing.find().sort({ date: -1 });
+    
+    // Format dates before sending response
+    const formattedBills = bills.map(bill => ({
+      ...bill.toObject(),
+      date: formatDate(bill.date)
+    }));
+    
+    res.status(200).json(formattedBills);
   } catch (err) {
     console.error("Error fetching bills:", err);
     res.status(500).json({ error: "Error fetching bills" });
   }
 };
 
-// Generate PDF for an existing bill
+// Get PDF for existing bill
 const getBillPDF = async (req, res) => {
   try {
     const { id } = req.params;
@@ -119,10 +130,13 @@ const getBillPDF = async (req, res) => {
       return res.status(404).json({ error: "Bill not found" });
     }
 
-    const pdfBuffer = generatePDF(bill.toObject());
+    const pdfBuffer = generatePDF({
+      ...bill.toObject(),
+      date: formatDate(bill.date)
+    });
     
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename=bill_${bill.billNo}.pdf`);
+    res.setHeader("Content-Disposition", `attachment; filename=bill_${bill._id}.pdf`);
     res.send(Buffer.from(pdfBuffer));
   } catch (err) {
     console.error("Error generating bill PDF:", err);
