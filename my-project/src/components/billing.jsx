@@ -21,6 +21,7 @@ const Billing = () => {
     mobile: "",
   });
 
+  const [suggestedMobile, setSuggestedMobile] = useState("");
   const tableRef = useRef(null);
   const [showScrollHint, setShowScrollHint] = useState(false);
 
@@ -28,6 +29,23 @@ const Billing = () => {
     fetchStockData();
     fetchBillingDetails();
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (customerInfo.customerName.trim() !== "") {
+        const existing = billingDetails.find(
+          b => b.customerName.toLowerCase() === customerInfo.customerName.toLowerCase()
+        );
+        if (existing) {
+          setSuggestedMobile(existing.mobile);
+          setCustomerInfo(prev => ({ ...prev, mobile: existing.mobile }));
+        } else {
+          setSuggestedMobile("");
+        }
+      }
+    }, 300); // debounce
+    return () => clearTimeout(timer);
+  }, [customerInfo.customerName, billingDetails]);
 
   const fetchStockData = () => {
     axios.get("http://localhost:5000/stock").then(res => setStockData(res.data));
@@ -81,6 +99,7 @@ const Billing = () => {
     const input = e.target.value.replace(/\D/g, "");
     if (input.length <= 10) {
       setCustomerInfo(prev => ({ ...prev, mobile: input }));
+      setSuggestedMobile(""); // Clear suggestion if manually changed
     }
   };
 
@@ -88,27 +107,27 @@ const Billing = () => {
     const { name, quantity, price } = formData;
     const { customerName, mobile } = customerInfo;
     const selectedStock = stockData.find(item => item.name === name);
-    
+
     if (!name || !quantity || !price || !customerName || !mobile) {
       alert("All fields are required.");
       return;
     }
-    
+
     if (quantity <= 0) {
       alert("Quantity must be greater than 0.");
       return;
     }
-    
+
     if (!selectedStock) {
       alert("Selected item not found in stock.");
       return;
     }
-    
+
     if (quantity > selectedStock.quantity) {
       alert(`Insufficient stock for "${name}". Available: ${selectedStock.quantity}`);
       return;
     }
-    
+
     setProductList(prev => [
       ...prev,
       {
@@ -117,7 +136,7 @@ const Billing = () => {
         mobile,
       }
     ]);
-    
+
     setSelectedItem("");
     setFormData({
       name: "",
@@ -127,47 +146,72 @@ const Billing = () => {
     });
   };
 
-  const generatePDF = () => {
-    const { customerName, mobile } = customerInfo;
-    const date = new Date().toISOString().split("T")[0];
-    const doc = new jsPDF();
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(22);
-    doc.text("KPS SILKS", 20, 20);
+ const generatePDF = () => {
+  const { customerName, mobile } = customerInfo;
+  const date = new Date().toISOString().split("T")[0];
+  const doc = new jsPDF();
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text("415 Uthukuli Road,", 20, 28);
-    doc.text("Kunnnathur, Tamil Nadu - 638103", 20, 33);
+  // Header
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22);
+  doc.text("KPS SILKS", 105, 20, { align: "center" });
 
-    doc.setFontSize(12);
-    doc.text(`Date: ${date}`, 150, 20, { align: "right" });
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.text("415 Uthukuli Road,", 105, 27, { align: "center" });
+  doc.text("Kunnnathur, Tamil Nadu - 638103", 105, 32, { align: "center" });
 
-    doc.text(`Customer Name : ${customerName}`, 20, 45);
-    doc.text(`Mobile Number : +91 ${mobile}`, 20, 50);
+  // Date and Customer Info
+  doc.setFontSize(12);
+  doc.text(`Date: ${date}`, 200, 40, { align: "right" });
 
-    doc.text("-------------------------------------------------------------", 20, 55);
+  doc.setFontSize(11);
+  doc.text(`Customer Name : ${customerName}`, 20, 50);
+  doc.text(`Mobile Number : +91 ${mobile}`, 20, 58);
 
-    let y = 65;
-    let grandTotal = 0;
+  // Table Header
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.line(20, 66, 200, 66); // Top border
+  doc.text("S.No", 22, 73);
+  doc.text("Product", 42, 73);
+  doc.text("Qty", 120, 73, { align: "right" });
+  doc.text("Price", 155, 73, { align: "right" });
+  doc.text("Total", 195, 73, { align: "right" });
+  doc.line(20, 76, 200, 76); // Underline
 
-    productList.forEach((item, idx) => {
-      doc.text(`${idx + 1}) Product: ${item.name}`, 20, y);
-      doc.text(`Qty: ${item.quantity}, Price: Rs. ${item.price.toFixed(2)}`, 30, y + 7);
-      doc.text(`Total: Rs. ${item.totalPrice.toFixed(2)}`, 30, y + 14);
-      grandTotal += item.totalPrice;
-      y += 20;
-    });
+  // Product Rows
+  doc.setFont("helvetica", "normal");
+  let y = 85;
+  let grandTotal = 0;
 
-    doc.text("-------------------------------------------------------------", 20, y);
-    doc.setFont("helvetica", "bold");
-    doc.text(`Grand Total: Rs. ${grandTotal.toFixed(2)}`, 20, y + 10);
-    doc.setFont("helvetica", "normal");
-    doc.text("Thank you for your purchase!", 20, y + 20);
+  productList.forEach((item, idx) => {
+    doc.text(`${idx + 1}`, 22, y);
+    doc.text(item.name, 42, y);
+    doc.text(`${item.quantity}`, 120, y, { align: "right" });
+    doc.text(`Rs. ${item.price.toFixed(2)}`, 155, y, { align: "right" });
+    doc.text(`Rs. ${item.totalPrice.toFixed(2)}`, 195, y, { align: "right" });
+    grandTotal += item.totalPrice;
+    y += 10;
+  });
 
-    return doc;
-  };
+  // Table Bottom Line
+  doc.line(20, y - 2, 200, y - 2);
+
+  // Grand Total
+  doc.setFont("helvetica", "bold");
+  doc.text(`Grand Total: Rs. ${grandTotal.toFixed(2)}`, 195, y + 10, { align: "right" });
+
+  // Footer
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(12);
+  doc.text("Thank you for shopping with us!", 105, y + 25, { align: "center" });
+
+  return doc;
+};
+
+
 
   const handleDownloadPDF = async () => {
     const { customerName, mobile } = customerInfo;
@@ -179,7 +223,6 @@ const Billing = () => {
     }
 
     try {
-      // First update stock
       for (const item of productList) {
         const stockItem = stockData.find(s => s.name === item.name);
         if (!stockItem || stockItem.quantity < item.quantity) {
@@ -191,7 +234,6 @@ const Billing = () => {
         });
       }
 
-      // Create bill in database
       await axios.post("http://localhost:5000/billing", {
         customerName,
         mobile,
@@ -200,11 +242,9 @@ const Billing = () => {
         grandTotal: productList.reduce((sum, item) => sum + item.totalPrice, 0)
       });
 
-      // Generate and save PDF
       const doc = generatePDF();
       doc.save(`bill_${customerName}_${date}.pdf`);
 
-      // Reset form
       setProductList([]);
       setFormData({
         name: "",
@@ -217,10 +257,9 @@ const Billing = () => {
         mobile: "",
       });
 
-      // Refresh data
       fetchStockData();
       fetchBillingDetails();
-      
+
       alert("Bill generated successfully!");
     } catch (err) {
       console.error("Billing Error:", err);
@@ -230,7 +269,7 @@ const Billing = () => {
 
   const openBillPDF = (bill) => {
     const doc = new jsPDF();
-    
+
     doc.setFont("helvetica", "bold");
     doc.setFontSize(22);
     doc.text("KPS SILKS", 20, 20);
@@ -265,7 +304,6 @@ const Billing = () => {
     doc.setFont("helvetica", "normal");
     doc.text("Thank you for your purchase!", 20, y + 20);
 
-    // Open PDF in new tab
     const pdfBlob = doc.output('blob');
     const pdfUrl = URL.createObjectURL(pdfBlob);
     window.open(pdfUrl, '_blank');
@@ -276,22 +314,32 @@ const Billing = () => {
       <h2 className="gradient-heading">Billing Section</h2>
       <form className="form">
         <div className="filter-form">
-          <div className="input-group">
-            <input 
-              type="text" 
-              placeholder="Customer Name" 
-              value={customerInfo.customerName}
-              onChange={(e) => setCustomerInfo(prev => ({ ...prev, customerName: e.target.value }))} 
-            />
-          </div>
-          <div className="input-group">
-            <input 
-              type="tel" 
-              placeholder="Mobile Number" 
-              value={customerInfo.mobile}
-              onChange={handleMobileChange} 
-            />
-          </div>
+<div className="input-group">
+  <input
+    list="customerNames"
+    placeholder="Customer Name"
+    value={customerInfo.customerName}
+    onChange={(e) => setCustomerInfo(prev => ({ ...prev, customerName: e.target.value }))}
+  />
+  <datalist id="customerNames">
+    {Array.from(new Set(billingDetails.map(b => b.customerName))).map((name, index) => (
+      <option key={index} value={name} />
+    ))}
+  </datalist>
+</div>
+
+<div className="input-group">
+  <input
+    type="tel"
+    placeholder="Mobile Number"
+    value={customerInfo.mobile}
+    onChange={handleMobileChange}
+  />
+  {suggestedMobile && (
+    <small className="suggestion-text">Using previously saved mobile: {suggestedMobile}</small>
+  )}
+</div>
+
           <div className="input-group">
             <select value={selectedItem} onChange={handleItemChange}>
               <option value="">Select item</option>
@@ -301,27 +349,27 @@ const Billing = () => {
             </select>
           </div>
           <div className="input-group">
-            <input 
-              type="number" 
-              min="1" 
-              value={formData.quantity} 
+            <input
+              type="number"
+              min="1"
+              value={formData.quantity}
               onChange={handleQuantityChange}
-              placeholder="Quantity" 
+              placeholder="Quantity"
             />
           </div>
           <div className="input-group">
-            <input 
-              type="text" 
-              value={formData.price} 
+            <input
+              type="text"
+              value={formData.price}
               onChange={handlePriceChange}
-              placeholder="Price" 
+              placeholder="Price"
             />
           </div>
           <div className="input-group">
-            <input 
-              type="text" 
-              value={formData.totalPrice.toFixed(2)} 
-              readOnly 
+            <input
+              type="text"
+              value={formData.totalPrice.toFixed(2)}
+              readOnly
             />
           </div>
           <button type="button" className="save-btn" onClick={handleAddItem}>Add Item</button>
@@ -374,10 +422,7 @@ const Billing = () => {
                 <td>{bill.date}</td>
                 <td>₹{parseFloat(bill.grandTotal).toFixed(2)}</td>
                 <td>
-                  <button 
-                    className="view-btn"
-                    onClick={() => openBillPDF(bill)}
-                  >
+                  <button className="view-btn" onClick={() => openBillPDF(bill)}>
                     View Bill
                   </button>
                 </td>
